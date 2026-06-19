@@ -2,8 +2,11 @@
 
 import { useState, useTransition } from 'react'
 import { saveSettings } from '@/lib/actions/settings'
+import { addAuthor, removeAuthor } from '@/lib/actions/auth'
 import type { SettingKey } from '@/lib/settings-keys'
-import { Globe, User, Mail, Shield, Check, ChevronDown, ChevronUp } from 'lucide-react'
+import { Globe, User, Mail, Shield, Check, ChevronDown, ChevronUp, UserPlus, Trash2 } from 'lucide-react'
+
+interface Author { id: string; name: string; email: string }
 
 interface Props {
   initial: Record<SettingKey, string>
@@ -11,6 +14,7 @@ interface Props {
   nextauthConfigured: boolean
   adminEmail: string
   adminName: string
+  authors: Author[]
 }
 
 function Section({ title, icon: Icon, children, defaultOpen = true }: {
@@ -81,12 +85,44 @@ function Textarea({ value, onChange, placeholder, rows = 3 }: {
   )
 }
 
-export default function SettingsClient({ initial, gmailConfigured, nextauthConfigured, adminEmail, adminName }: Props) {
+export default function SettingsClient({ initial, gmailConfigured, nextauthConfigured, adminEmail, adminName, authors: initialAuthors }: Props) {
   const [values, setValues] = useState(initial)
   const [saved, setSaved] = useState(false)
   const [, startTransition] = useTransition()
 
+  // Authors state
+  const [authors, setAuthors] = useState<Author[]>(initialAuthors)
+  const [newName, setNewName] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [authorError, setAuthorError] = useState('')
+  const [authorSuccess, setAuthorSuccess] = useState('')
+  const [authorLoading, setAuthorLoading] = useState(false)
+
   const set = (key: SettingKey) => (v: string) => setValues(prev => ({ ...prev, [key]: v }))
+
+  const handleAddAuthor = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAuthorError(''); setAuthorSuccess(''); setAuthorLoading(true)
+    const fd = new FormData()
+    fd.append('name', newName); fd.append('email', newEmail); fd.append('password', newPassword)
+    const res = await addAuthor(fd)
+    setAuthorLoading(false)
+    if (res.error) { setAuthorError(res.error); return }
+    setAuthors(prev => [...prev, { id: Date.now().toString(), name: newName, email: newEmail }])
+    setNewName(''); setNewEmail(''); setNewPassword('')
+    setAuthorSuccess('Author added successfully.')
+    setTimeout(() => setAuthorSuccess(''), 3000)
+  }
+
+  const handleRemoveAuthor = (id: string) => {
+    if (!confirm('Remove this author?')) return
+    startTransition(async () => {
+      const res = await removeAuthor(id)
+      if (res.error) { setAuthorError(res.error); return }
+      setAuthors(prev => prev.filter(a => a.id !== id))
+    })
+  }
 
   const handleSave = () => {
     startTransition(async () => {
@@ -183,6 +219,45 @@ GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx`}
             {adminName && <span className="text-xs" style={{ color: 'var(--text-faint)' }}>({adminName})</span>}
           </div>
         </Field>
+      </Section>
+
+      {/* Authors */}
+      <Section title="Authors" icon={UserPlus} defaultOpen={true}>
+        {/* Existing authors */}
+        <div className="space-y-2">
+          {authors.map(a => (
+            <div key={a.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg" style={{ background: 'var(--surface2)', border: '1px solid var(--border)' }}>
+              <div>
+                <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>{a.name}</p>
+                <p className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>{a.email}</p>
+              </div>
+              {authors.length > 1 && (
+                <button onClick={() => handleRemoveAuthor(a.id)} className="p-1.5 rounded-lg hover:bg-danger/10 text-danger transition-colors">
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Add new author */}
+        <div className="pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
+          <p className="text-xs font-mono uppercase tracking-widest mb-3" style={{ color: 'var(--text-faint)' }}>Add Author</p>
+          <form onSubmit={handleAddAuthor} className="space-y-2">
+            <Input value={newName} onChange={setNewName} placeholder="Full name" />
+            <Input value={newEmail} onChange={setNewEmail} placeholder="Email address" type="email" />
+            <Input value={newPassword} onChange={setNewPassword} placeholder="Password (min 8 chars)" type="password" />
+            {authorError && <p className="text-xs text-danger">{authorError}</p>}
+            {authorSuccess && <p className="text-xs text-accent">{authorSuccess}</p>}
+            <button
+              type="submit"
+              disabled={authorLoading}
+              className="flex items-center gap-1.5 px-4 py-2 bg-accent text-black text-sm font-semibold rounded-lg hover:bg-[#b08838] transition-colors disabled:opacity-50"
+            >
+              <UserPlus size={13} /> {authorLoading ? 'Adding...' : 'Add Author'}
+            </button>
+          </form>
+        </div>
       </Section>
 
       {/* Security */}

@@ -6,7 +6,7 @@ import { adminUsers } from '@/lib/db/schema'
 export default async function AdminSettingsPage() {
   const [settings, admins] = await Promise.all([
     getSettings(),
-    db.select({ email: adminUsers.email, name: adminUsers.name }).from(adminUsers),
+    db.select({ id: adminUsers.id, email: adminUsers.email, name: adminUsers.name }).from(adminUsers),
   ])
 
   const gmailConfigured = !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD)
@@ -21,6 +21,7 @@ export default async function AdminSettingsPage() {
       nextauthConfigured={nextauthConfigured}
       adminEmail={adminEmail}
       adminName={adminName}
+      authors={admins}
     />
   )
 }
